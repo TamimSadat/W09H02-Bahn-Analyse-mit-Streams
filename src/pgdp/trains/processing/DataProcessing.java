@@ -30,9 +30,16 @@ public class DataProcessing {
 
     public static TrainConnection worstDelayedTrain(Stream<TrainConnection> connections) {
         // TODO Task 2.
-       Comparator<TrainConnection> worstDelay = Comparator.comparingInt(delay -> delay.stops().stream()
-               .mapToInt(TrainStop::getDelay).sum());
-       return connections.max(worstDelay).orElse(null);
+        if (connections == null) {
+          return null;
+        }
+        else {
+            Comparator<TrainConnection> worstDelay = Comparator.
+                    comparingDouble(delay -> delay.stops().stream()
+                            .mapToDouble(TrainStop::getDelay).sum());
+            return connections.max(worstDelay).orElse(null);
+        }
+
     }
 
     public static double percentOfKindStops(Stream<TrainConnection> connections, TrainStop.Kind kind) {
