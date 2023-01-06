@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -16,16 +18,21 @@ public class DataProcessing {
 
     public static Stream<TrainConnection> cleanDataset(Stream<TrainConnection> connections) {
         // TODO Task 1.
-        List<TrainConnection> connectionsList = new ArrayList<>(connections.distinct().toList());
-        connectionsList.sort(Comparator.comparing(connection -> connection.getFirstStop().scheduled()));
-        Stream<TrainConnection> connectionsCancelled = connectionsList.stream()
-                .map(connection ->
-                                connection.withUpdatedStops(connection.stops().stream()
-                                                .filter(connectionsStop -> connectionsStop.kind() != TrainStop.Kind.CANCELLED)
-                                                .toList()
-                                )
-                );
-        return connectionsCancelled;
+        if (connections == null) {
+            return null;
+        }
+        else {
+            List<TrainConnection> connectionsList = new ArrayList<>(connections.distinct().toList());
+            connectionsList.sort(Comparator.comparing(connection -> connection.getFirstStop().scheduled()));
+            Stream<TrainConnection> connectionsCancelled = connectionsList.stream()
+                    .map(connection ->
+                            connection.withUpdatedStops(connection.stops().stream()
+                                    .filter(connectionsStop -> connectionsStop.kind() != TrainStop.Kind.CANCELLED)
+                                    .toList()
+                            )
+                    );
+            return connectionsCancelled;
+        }
     }
 
     public static TrainConnection worstDelayedTrain(Stream<TrainConnection> connections) {
@@ -34,22 +41,53 @@ public class DataProcessing {
           return null;
         }
         else {
-            Comparator<TrainConnection> worstDelay = Comparator.
-                    comparingDouble(delay -> delay.stops().stream()
-                            .mapToDouble(TrainStop::getDelay).sum());
-            return connections.max(worstDelay).orElse(null);
+            Comparator<TrainConnection> maxValueEachConnection = Comparator.comparingDouble(trainConnection ->
+                    trainConnection.stops().stream().mapToDouble(delays -> delays.getDelay()).max().orElse(0)
+            );
+            TrainConnection worstDelay = connections.max(maxValueEachConnection).orElse(null);
+            return worstDelay;
         }
-
+        //https://stackoverflow.com/questions/31378324/how-to-find-maximum-value-from-a-integer-using-stream-in-java-8
+        //Obiger Link, erste Antwort. Statt Intstream habe ich Doublestream verwendet.
+        // Code nochmal abgeändert, da ich nicht max von allen max delays berücksichtigt habe.
     }
 
     public static double percentOfKindStops(Stream<TrainConnection> connections, TrainStop.Kind kind) {
         // TODO Task 3.
-        return 0.0;
+        if (connections == null || kind != TrainStop.Kind.CANCELLED && kind != TrainStop.Kind.ADDITIONAL && kind != TrainStop.Kind.REGULAR) {
+            return 0;
+        }
+        else {
+            ArrayList<TrainConnection> trainConnections = new ArrayList<>(connections.toList());
+            double nmberOfallStops = trainConnections.stream()
+                    .map(TrainConnection::stops)
+                    .mapToLong(List::size).sum();
+            if (nmberOfallStops == 0) {
+                return 0;
+            }
+            else {
+                double allKind = trainConnections.stream()
+                        .map(TrainConnection::stops)
+                        .flatMap(List::stream).filter(trainStop -> trainStop.kind() == kind)
+                        .count();
+                return (allKind / nmberOfallStops) * 100;
+            }
+            //https://stackoverflow.com/questions/25147094/how-can-i-turn-a-list-of-lists-into-a-list-in-java-8
+            //Für flatmap(List::stream) die Quelle dazu -> Erste Antwort mit meisten Upvotes
+        }
     }
 
     public static double averageDelayAt(Stream<TrainConnection> connections, Station station) {
         // TODO Task 4.
-        return 0.0;
+        List<TrainStop> stops = connections
+                .flatMap(trainConnection -> trainConnection.stops().stream())
+                .filter(stop -> stop.station().equals(station)).toList();
+        if (stops.isEmpty()) {
+            return 0;
+        }
+        else {
+            return (double) stops.stream().mapToLong(TrainStop::getDelay).sum() / stops.size();
+        }
     }
 
     public static Map<String, Double> delayComparedToTotalTravelTimeByTransport(Stream<TrainConnection> connections) {
@@ -112,13 +150,14 @@ public class DataProcessing {
         // nicht mehr enthalten sein.
 
         TrainConnection worstDelayedTrain = worstDelayedTrain(trainConnections.stream());
-        System.out.println(worstDelayedTrain);
         // worstDelayedTrain sollte ICE 3 sein. (Da der Stop in AUGSBURG_HBF mit 40 Minuten Verspätung am spätesten ist.)
 
-        double percentOfKindStops = percentOfKindStops(trainConnections.stream(), TrainStop.Kind.CANCELLED);
+        double percentOfKindStops = percentOfKindStops(trainConnections.stream(), TrainStop.Kind.ADDITIONAL);
         // percentOfKindStops REGULAR sollte 85.71428571428571 sein, CANCELLED 14.285714285714285.
+        System.out.println(percentOfKindStops);
 
         double averageDelayAt = averageDelayAt(trainConnections.stream(), Station.NUERNBERG_HBF);
+
         // averageDelayAt sollte 10.0 sein. (Da dreimal angefahren und einmal 30 Minuten Verspätung).
 
         Map<String, Double> delayCompared = delayComparedToTotalTravelTimeByTransport(trainConnections.stream());
